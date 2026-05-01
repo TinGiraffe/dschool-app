@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>디스쿨 게시판 크롤러</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f1117;
+  --bg2: #161820;
+  --bg3: #1e2130;
+  --border: #2a2d3e;
+  --accent: #4f8ef7;
+  --accent2: #7c3aed;
+  --green: #22c55e;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --text: #e8eaf0;
+  --muted: #6b7280;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Noto Sans KR', sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;font-size:14px}
+/* ── 레이아웃 ── */
+.shell{display:grid;grid-template-columns:220px 1fr;grid-template-rows:56px 1fr;height:100vh;overflow:hidden}
+.topbar{grid-column:1/-1;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;z-index:10}
+.logo{font-size:15px;font-weight:700;color:var(--accent);letter-spacing:-.3px}
+.logo span{color:var(--muted);font-weight:300}
+.server-status{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.status-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-dot.err{background:var(--red)}
+/* ── 사이드바 ── */
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:16px 0;overflow-y:auto}
+.nav-section{padding:0 12px;margin-bottom:20px}
+.nav-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:0 8px;margin-bottom:6px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;cursor:pointer;color:var(--muted);font-size:13px;transition:all .15s;user-select:none}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:rgba(79,142,247,.12);color:var(--accent)}
+.nav-item .ico{font-size:15px;width:18px;text-align:center}
+/* ── 메인 ── */
+.main{overflow-y:auto;background:var(--bg)}
+.page{display:none;padding:24px;max-width:960px}
+.page.active{display:block}
+.page-title{font-size:20px;font-weight:700;margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+/* ── 카드 ── */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em}
+/* ── 폼 ── */
+.form-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.form-field{display:flex;flex-direction:column;gap:5px;flex:1;min-width:130px}
+.form-field label{font-size:11px;color:var(--muted);font-weight:500}
+input,select{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:var(--sans);width:100%;transition:border-color .15s}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+input::placeholder{color:var(--muted)}
+/* ── 버튼 ── */
+.btn{padding:8px 16px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;cursor:pointer;font-family:var(--sans);transition:all .15s;white-space:nowrap}
+.btn:hover{background:var(--border)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover:not(:disabled){background:#3b7de8}
+.btn.danger{border-color:#3f1f1f;color:var(--red)}
+.btn.danger:hover{background:#3f1f1f}
+.btn.sm{padding:4px 10px;font-size:12px}
+/* ── 사이트 블록 ── */
+.site-block{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.site-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.site-name-text{font-size:14px;font-weight:500;flex:1}
+.site-url-text{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.boards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.board-chip{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 10px;display:flex;align-items:center;gap:8px}
+.mk-badge{font-size:10px;font-weight:500;color:var(--accent);background:rgba(79,142,247,.1);padding:2px 7px;border-radius:4px;font-family:var(--mono);flex-shrink:0}
+.board-chip-name{font-size:12px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ── 상태 배지 ── */
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 8px;border-radius:20px;font-weight:500}
+.badge.idle{background:#1e2130;color:var(--muted)}
+.badge.running{background:rgba(79,142,247,.1);color:var(--accent)}
+.badge.done{background:rgba(34,197,94,.1);color:var(--green)}
+.badge.error{background:rgba(239,68,68,.1);color:var(--red)}
+.badge-dot{width:5px;height:5px;border-radius:50%}
+.badge.idle .badge-dot{background:var(--muted)}
+.badge.running .badge-dot{background:var(--accent);animation:pulse 1s infinite}
+.badge.done .badge-dot{background:var(--green)}
+.badge.error .badge-dot{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+/* ── 통계 ── */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+.stat-val{font-size:22px;font-weight:700;color:var(--text);font-family:var(--mono)}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+/* ── 로그 ── */
+.log-box{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-family:var(--mono);font-size:11px;color:var(--muted);max-height:160px;overflow-y:auto;line-height:1.9}
+.log-line{display:flex;gap:10px}
+.log-time{color:#374151;flex-shrink:0}
+.log-info{color:var(--muted)}
+.log-ok{color:var(--green)}
+.log-err{color:var(--red)}
+.log-accent{color:var(--accent)}
+/* ── 크롤 행 ── */
+.crawl-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.crawl-row:last-child{border:none}
+.crawl-info{flex:1;min-width:0}
+.crawl-title{font-size:13px;color:var(--text)}
+.crawl-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.progress-bar{height:2px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:4px}
+.progress-fill{height:100%;width:35%;background:var(--accent);border-radius:2px;animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}
+}
+/* ── 게시글 미리보기 ── */
+.post-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px}
+.post-card-title{font-size:13px;font-weight:500;margin-bottom:5px;color:var(--text)}
+.post-card-body{font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:7px}
+.post-card-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tag{font-size:11px;color:var(--accent);background:rgba(79,142,247,.08);padding:2px 7px;border-radius:4px;font-family:var(--mono)}
+.reply-block{border-left:2px solid var(--border);padding-left:10px;margin-top:8px;font-size:11px;color:var(--muted);line-height:1.8}
+/* ── 요약 ── */
+.summary-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:16px}
+.summary-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.summary-site{font-size:16px;font-weight:700}
+.summary-date{font-size:12px;color:var(--muted);margin-top:2px}
+.sent-badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500}
+.sent-pos{background:rgba(34,197,94,.1);color:var(--green)}
+.sent-mix{background:rgba(245,158,11,.1);color:var(--amber)}
+.sent-neg{background:rgba(239,68,68,.1);color:var(--red)}
+.sent-neu{background:var(--bg3);color:var(--muted)}
+.divider{height:1px;background:var(--border);margin:12px 0}
+.sec-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:7px}
+.narrative{font-size:13px;line-height:1.8;color:var(--text)}
+.insight-box{background:rgba(79,142,247,.06);border:1px solid rgba(79,142,247,.2);border-radius:6px;padding:10px 14px;font-size:13px;color:var(--text);line-height:1.7;margin:10px 0}
+.insight-box strong{color:var(--accent)}
+.bullet-list{display:flex;flex-direction:column;gap:5px}
+.bullet{font-size:13px;color:var(--text);line-height:1.6;padding-left:14px;position:relative}
+.bullet::before{content:"›";position:absolute;left:0;color:var(--accent);font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip-topic{font-size:12px;padding:4px 10px;border-radius:5px;background:var(--bg3);border:1px solid var(--border);color:var(--text)}
+.chip-tag{font-size:12px;padding:4px 10px;border-radius:5px;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.15);color:var(--green);font-family:var(--mono)}
+.board-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.board-tab{font-size:12px;padding:4px 12px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--muted);cursor:pointer;transition:all .15s}
+.board-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+/* ── 설정 패널 ── */
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.setting-row:last-child{border:none}
+.setting-info{font-size:13px;color:var(--text)}
+.setting-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px}
+.scroll-area{max-height:480px;overflow-y:auto}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- 상단바 -->
+  <header class="topbar">
+    <div class="logo">디스쿨 <span>크롤러</span></div>
+    <div style="font-size:12px;color:var(--muted);font-family:var(--mono)">dschool.co.kr</div>
+    <div class="server-status">
+      <div class="status-dot" id="server-dot"></div>
+      <span id="server-label">서버 확인 중...</span>
+    </div>
+  </header>
+
+  <!-- 사이드바 -->
+  <nav class="sidebar">
+    <div class="nav-section">
+      <div class="nav-label">메뉴</div>
+      <div class="nav-item active" onclick="goPage('sites')"><span class="ico">🏠</span>사이트 & 게시판</div>
+      <div class="nav-item" onclick="goPage('crawl')"><span class="ico">🔄</span>크롤링</div>
+      <div class="nav-item" onclick="goPage('posts')"><span class="ico">📋</span>게시글 미리보기</div>
+      <div class="nav-item" onclick="goPage('summaries')"><span class="ico">✨</span>AI 요약</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">시스템</div>
+      <div class="nav-item" onclick="goPage('settings')"><span class="ico">⚙️</span>설정</div>
+    </div>
+  </nav>
+
+  <!-- 메인 -->
+  <main class="main">
+
+    <!-- ── 사이트 & 게시판 ── -->
+    <div class="page active" id="page-sites">
+      <div class="page-title">사이트 & 게시판</div>
+      <div class="page-sub">크롤링할 사이트와 게시판(mk= 값)을 등록하세요.</div>
+
+      <div class="card">
+        <div class="card-title">새 사이트 추가</div>
+        <div class="form-row">
+          <div class="form-field" style="flex:2"><label>사이트 이름</label><input id="s-name" placeholder="예: 디스쿨"></div>
+          <div class="form-field" style="flex:3"><label>기본 URL</label><input id="s-url" placeholder="https://www.dschool.co.kr/fs/board/list.asp"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>로그인 URL</label><input id="s-login" placeholder="https://www.dschool.co.kr/fs/member/login.asp"></div>
+          <div class="form-field"><label>아이디</label><input id="s-user" placeholder="아이디"></div>
+          <div class="form-field"><label>비밀번호</label><input id="s-pass" type="password" placeholder="••••••••"></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:4px">
+          <button class="btn primary" onclick="addSite()">+ 사이트 추가</button>
+        </div>
+      </div>
+
+      <div id="sites-list"><div class="empty">등록된 사이트가 없습니다.</div></div>
+
+      <!-- 게시판 추가 폼 -->
+      <div class="card" id="board-form" style="display:none;border-color:rgba(79,142,247,.3)">
+        <div class="card-title" style="color:var(--accent)"><span id="board-form-site"></span>에 게시판 추가</div>
+        <div class="form-row">
+          <div class="form-field" style="max-width:130px"><label>mk= 값</label><input id="b-mk" placeholder="예: 41"></div>
+          <div class="form-field"><label>게시판 이름</label><input id="b-name" placeholder="예: 학교게시판"></div>
+          <div style="display:flex;gap:6px;align-items:flex-end;padding-bottom:1px">
+            <button class="btn primary" onclick="addBoard()">+ 추가</button>
+            <button class="btn" onclick="cancelBoard()">취소</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 크롤링 ── -->
+    <div class="page" id="page-crawl">
+      <div class="page-title">크롤링</div>
+      <div class="page-sub">등록된 게시판에서 게시글·댓글·해시태그를 수집합니다.</div>
+
+      <div class="stats-grid">
+        <div class="stat"><div class="stat-val" id="st-sites">0</div><div class="stat-lbl">사이트</div></div>
+        <div class="stat"><div class="stat-val" id="st-boards">0</div><div class="stat-lbl">게시판</div></div>
+        <div class="stat"><div class="stat-val" id="st-posts">0</div><div class="stat-lbl">수집 게시글</div></div>
+        <div class="stat"><div class="stat-val" id="st-replies">0</div><div class="stat-lbl">수집 댓글</div></div>
+        <div class="stat"><div class="stat-val" id="st-tags">0</div><div class="stat-lbl">해시태그</div></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="card-title" style="margin:0">게시판 상태</div>
+          <button class="btn primary" id="crawl-all-btn" onclick="crawlAll()">전체 크롤링</button>
+        </div>
+        <div id="crawl-list"><div class="empty">등록된 게시판이 없습니다.</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">활동 로그</div>
+        <div class="log-box" id="log-box"><div class="log-line"><span class="log-time">--:--:--</span><span class="log-info">대기 중...</span></div></div>
+      </div>
+    </div>
+
+    <!-- ── 게시글 미리보기 ── -->
+    <div class="page" id="page-posts">
+      <div class="page-title">게시글 미리보기</div>
+      <div class="page-sub">크롤링된 게시글 원문을 게시판별로 확인합니다.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        <div class="form-field" style="max-width:180px"><label>사이트</label><select id="pv-site" onchange="onPvSiteChange()"><option value="">선택</option></select></div>
+        <div class="form-field" style="max-width:180px"><label>게시판</label><select id="pv-board" onchange="renderPostPreview()"><option value="">전체</option></select></div>
+        <div class="form-field" style="max-width:150px"><label>날짜</label><input type="date" id="pv-date" onchange="renderPostPreview()"></div>
+      </div>
+      <div id="posts-container"><div class="empty">사이트를 선택하고 크롤링을 실행해주세요.</div></div>
+    </div>
+
+    <!-- ── AI 요약 ── -->
+    <div class="page" id="page-summaries">
+      <div class="page-title">AI 요약</div>
+      <div class="page-sub">크롤링된 게시판 내용을 AI가 분석하여 일별 인사이트를 생성합니다.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px">
+        <div class="form-field" style="max-width:150px"><label>날짜</label><input type="date" id="sm-date"></div>
+        <div class="form-field" style="max-width:180px"><label>사이트</label><select id="sm-site" onchange="onSmSiteChange()"><option value="">선택</option></select></div>
+        <div class="form-field" style="max-width:200px"><label>게시판</label><select id="sm-board"><option value="all">전체 통합</option></select></div>
+        <button class="btn primary" id="gen-btn" onclick="generateSummary()">요약 생성 ↗</button>
+      </div>
+      <div id="summaries-container"><div class="empty">크롤링 후 요약을 생성해주세요.</div></div>
+    </div>
+
+    <!-- ── 설정 ── -->
+    <div class="page" id="page-settings">
+      <div class="page-title">설정</div>
+      <div class="page-sub">백엔드 서버 연결 및 크롤링 옵션을 설정합니다.</div>
+      <div class="card">
+        <div class="card-title">백엔드 서버</div>
+        <div class="setting-row">
+          <div><div class="setting-info">Railway 서버 주소</div><div class="setting-sub">크롤링 API 서버 URL</div></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="cfg-server" value="https://dschool-crawler-production.up.railway.app" style="width:340px;font-family:var(--mono);font-size:12px">
+            <button class="btn primary" onclick="saveServer()">저장</button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-info">게시판당 최대 수집 수</div><div class="setting-sub">크롤링할 최대 게시글 수</div></div>
+          <input id="cfg-maxposts" value="30" type="number" style="width:80px;text-align:center">
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-info">서버 연결 상태</div></div>
+          <button class="btn" onclick="checkHealth()">연결 테스트</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ── 상수 ───────────────────────────────────────────────
+const DEFAULT_SERVER = 'https://dschool-crawler-production.up.railway.app';
+
+// ── 상태 ───────────────────────────────────────────────
+let SERVER = localStorage.getItem('server') || DEFAULT_SERVER;
+let sites = JSON.parse(localStorage.getItem('sites') || '[]');
+let crawledData = JSON.parse(localStorage.getItem('crawledData') || '{}');
+let summaries = JSON.parse(localStorage.getItem('summaries') || '[]');
+let logLines = [];
+let addBoardTarget = null;
+let activeBoardTabs = {};
+
+const TODAY = new Date().toISOString().split('T')[0];
+document.getElementById('sm-date').value = TODAY;
+document.getElementById('pv-date').value = TODAY;
+document.getElementById('cfg-server').value = SERVER;
+
+// ── 저장 ───────────────────────────────────────────────
+function save() {
+  localStorage.setItem('sites', JSON.stringify(sites));
+  localStorage.setItem('crawledData', JSON.stringify(crawledData));
+  localStorage.setItem('summaries', JSON.stringify(summaries));
+}
+
+// ── 서버 헬스체크 ──────────────────────────────────────
+async function checkHealth() {
+  const dot = document.getElementById('server-dot');
+  const lbl = document.getElementById('server-label');
+  try {
+    const r = await fetch(`${SERVER}/health`);
+    const d = await r.json();
+    if (d.status === 'ok') {
+      dot.className = 'status-dot ok';
+      lbl.textContent = '서버 정상';
+      addLog('서버 연결 확인됨', 'ok');
+    } else { throw new Error(); }
+  } catch {
+    dot.className = 'status-dot err';
+    lbl.textContent = '서버 연결 실패';
+    addLog('서버에 연결할 수 없습니다. 설정에서 주소를 확인하세요.', 'err');
+  }
+}
+
+function saveServer() {
+  SERVER = document.getElementById('cfg-server').value.trim().replace(/\/$/, '');
+  localStorage.setItem('server', SERVER);
+  addLog(`서버 주소 변경: ${SERVER}`, 'accent');
+  checkHealth();
+}
+
+// ── 로그 ───────────────────────────────────────────────
+function addLog(msg, type = 'info') {
+  const t = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  logLines.unshift({t, msg, type});
+  if (logLines.length > 60) logLines.pop();
+  document.getElementById('log-box').innerHTML = logLines.map(l =>
+    `<div class="log-line"><span class="log-time">${l.t}</span><span class="log-${l.type||'info'}">${l.msg}</span></div>`
+  ).join('');
+}
+
+// ── 네비게이션 ─────────────────────────────────────────
+function goPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelector(`.nav-item[onclick="goPage('${id}')"]`).classList.add('active');
+  if (id === 'crawl') renderCrawlList();
+  if (id === 'posts') renderPostPreview();
+  if (id === 'summaries') renderSummaries();
+}
+
+// ── 사이트 관리 ────────────────────────────────────────
+function addSite() {
+  const name  = document.getElementById('s-name').value.trim();
+  const url   = document.getElementById('s-url').value.trim();
+  const login = document.getElementById('s-login').value.trim();
+  const user  = document.getElementById('s-user').value.trim();
+  const pass  = document.getElementById('s-pass').value.trim();
+  if (!name || !url || !user || !pass) { alert('모든 항목을 입력해주세요.'); return; }
+  sites.push({ id: Date.now(), name, url, login_url: login || url.replace('list.asp','').replace('board/','member/login.asp'), user, pass, boards: [] });
+  ['s-name','s-url','s-login','s-user','s-pass'].forEach(i => document.getElementById(i).value = '');
+  addLog(`사이트 추가: ${name}`, 'accent');
+  save(); renderAll();
+}
+function removeSite(id) {
+  sites = sites.filter(s => s.id !== id);
+  delete crawledData[id];
+  save(); renderAll(); addLog('사이트 삭제됨');
+}
+function showBoardForm(siteId) {
+  addBoardTarget = siteId;
+  const site = sites.find(s => s.id === siteId);
+  document.getElementById('board-form-site').textContent = site.name;
+  document.getElementById('board-form').style.display = 'block';
+  document.getElementById('b-mk').value = '';
+  document.getElementById('b-name').value = '';
+  document.getElementById('b-mk').focus();
+}
+function cancelBoard() { addBoardTarget = null; document.getElementById('board-form').style.display = 'none'; }
+function addBoard() {
+  if (!addBoardTarget) return;
+  const mk   = document.getElementById('b-mk').value.trim();
+  const name = document.getElementById('b-name').value.trim();
+  if (!mk || !name) { alert('mk 값과 게시판 이름을 입력해주세요.'); return; }
+  const site = sites.find(s => s.id === addBoardTarget);
+  if (site.boards.find(b => b.mk === mk)) { alert('이미 등록된 mk 값입니다.'); return; }
+  site.boards.push({ mk, name, status: 'idle', lastCrawl: null, postCount: 0, replyCount: 0 });
+  addLog(`게시판 추가: ${name} (mk=${mk})`, 'accent');
+  cancelBoard(); save(); renderAll();
+}
+function removeBoard(siteId, mk) {
+  const site = sites.find(s => s.id === siteId);
+  site.boards = site.boards.filter(b => b.mk !== mk);
+  save(); renderAll(); addLog(`게시판 삭제 (mk=${mk})`);
+}
+
+// ── 렌더링: 사이트 목록 ────────────────────────────────
+function renderSitesList() {
+  const el = document.getElementById('sites-list');
+  if (!sites.length) { el.innerHTML = '<div class="empty">등록된 사이트가 없습니다.</div>'; return; }
+  el.innerHTML = sites.map(s => `
+    <div class="site-block">
+      <div class="site-header">
+        <div style="flex:1;min-width:0">
+          <div class="site-name-text">${s.name}</div>
+          <div class="site-url-text">${s.url}</div>
+        </div>
+        <button class="btn sm" onclick="showBoardForm(${s.id})">+ 게시판</button>
+        <button class="btn sm danger" onclick="removeSite(${s.id})">삭제</button>
+      </div>
+      ${s.boards.length
+        ? `<div class="boards-grid">${s.boards.map(b => `
+            <div class="board-chip">
+              <span class="mk-badge">mk=${b.mk}</span>
+              <span class="board-chip-name">${b.name}</span>
+              <button class="btn sm danger" style="padding:2px 7px;font-size:11px" onclick="removeBoard(${s.id},'${b.mk}')">×</button>
+            </div>`).join('')}</div>`
+        : `<div style="font-size:12px;color:var(--muted)">게시판이 없습니다. "+ 게시판"을 클릭해 추가하세요.</div>`}
+    </div>`).join('');
+}
+
+// ── 렌더링: 크롤 목록 ─────────────────────────────────
+function renderCrawlList() {
+  const el = document.getElementById('crawl-list');
+  const allBoards = sites.flatMap(s => s.boards);
+  if (!allBoards.length) { el.innerHTML = '<div class="empty">등록된 게시판이 없습니다.</div>'; return; }
+  el.innerHTML = sites.map(s => {
+    if (!s.boards.length) return '';
+    return `<div style="margin-bottom:8px">
+      <div style="font-size:11px;color:var(--muted);padding:4px 0 6px;font-weight:500;text-transform:uppercase;letter-spacing:.06em">${s.name}</div>
+      ${s.boards.map(b => `
+        <div class="crawl-row">
+          <span class="mk-badge">mk=${b.mk}</span>
+          <div class="crawl-info">
+            <div class="crawl-title">${b.name}</div>
+            <div class="crawl-meta">${b.lastCrawl ? `마지막 수집: ${b.lastCrawl} · ${b.postCount}개 게시글 · ${b.replyCount}개 댓글` : '아직 크롤링하지 않음'}</div>
+            ${b.status === 'running' ? '<div class="progress-bar"><div class="progress-fill"></div></div>' : ''}
+          </div>
+          <span class="badge ${b.status}"><span class="badge-dot"></span>${{idle:'대기',running:'진행 중',done:'완료',error:'오류'}[b.status]||b.status}</span>
+          <button class="btn sm" onclick="crawlBoard(${s.id},'${b.mk}')">크롤링</button>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+// ── 통계 업데이트 ──────────────────────────────────────
+function updateStats() {
+  document.getElementById('st-sites').textContent = sites.length;
+  document.getElementById('st-boards').textContent = sites.flatMap(s => s.boards).length;
+  const allPosts = Object.values(crawledData).flatMap(s => Object.values(s).flatMap(d => Object.values(d))).flat();
+  document.getElementById('st-posts').textContent = allPosts.length;
+  document.getElementById('st-replies').textContent = allPosts.reduce((a, p) => a + (p.replies?.length || 0), 0);
+  document.getElementById('st-tags').textContent = new Set(allPosts.flatMap(p => p.hashtags || [])).size;
+}
+
+// ── 셀렉트 업데이트 ────────────────────────────────────
+function updateSelects() {
+  const opts = sites.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  ['pv-site', 'sm-site'].forEach(id => {
+    document.getElementById(id).innerHTML = `<option value="">선택</option>${opts}`;
+  });
+}
+function onPvSiteChange() {
+  const site = sites.find(s => s.id == document.getElementById('pv-site').value);
+  document.getElementById('pv-board').innerHTML = '<option value="">전체 게시판</option>' + (site ? site.boards.map(b => `<option value="${b.mk}">${b.name} (mk=${b.mk})</option>`).join('') : '');
+  renderPostPreview();
+}
+function onSmSiteChange() {
+  const site = sites.find(s => s.id == document.getElementById('sm-site').value);
+  document.getElementById('sm-board').innerHTML = '<option value="all">전체 통합</option>' + (site ? site.boards.map(b => `<option value="${b.mk}">${b.name} (mk=${b.mk})</option>`).join('') : '');
+}
+
+// ── 실제 크롤링 API 호출 ───────────────────────────────
+async function crawlBoard(siteId, mk) {
+  const site  = sites.find(s => s.id === siteId);
+  const board = site?.boards.find(b => b.mk === mk);
+  if (!board) return;
+
+  board.status = 'running';
+  renderCrawlList();
+  addLog(`[${site.name}] mk=${mk} (${board.name}) 크롤링 시작...`, 'accent');
+
+  try {
+    // 1. 크롤링 시작 요청
+    const startRes = await fetch(`${SERVER}/crawl`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        site_id:    String(siteId),
+        site_name:  site.name,
+        base_url:   site.url,
+        login_url:  site.login_url,
+        username:   site.user,
+        password:   site.pass,
+        boards:     [{ mk, name: board.name }],
+        max_posts:  parseInt(document.getElementById('cfg-maxposts').value) || 30,
+      })
+    });
+    const startData = await startRes.json();
+    addLog(`서버 응답: ${startData.message || startData.status}`, 'info');
+
+    // 2. 완료될 때까지 폴링
+    addLog(`결과 대기 중...`, 'info');
+    let done = false;
+    let tries = 0;
+    while (!done && tries < 60) {
+      await sleep(5000);
+      tries++;
+      const statusRes = await fetch(`${SERVER}/crawl/status/${siteId}`);
+      const statusData = await statusRes.json();
+      addLog(`상태 확인 (${tries}): ${statusData.status}`, 'info');
+
+      if (statusData.status === 'done') {
+        done = true;
+        // 3. 결과 가져오기
+        const date = new Date().toISOString().split('T')[0];
+        const resultRes = await fetch(`${SERVER}/results/${siteId}/${date}/${mk}`);
+        const posts = await resultRes.json();
+
+        if (Array.isArray(posts) && posts.length > 0) {
+          if (!crawledData[siteId]) crawledData[siteId] = {};
+          if (!crawledData[siteId][date]) crawledData[siteId][date] = {};
+          crawledData[siteId][date][mk] = posts;
+          board.postCount   = posts.length;
+          board.replyCount  = posts.reduce((a, p) => a + (p.replies?.length || 0), 0);
+          board.lastCrawl   = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+          board.status      = 'done';
+          addLog(`완료: ${posts.length}개 게시글, ${board.replyCount}개 댓글 수집됨`, 'ok');
+        } else {
+          board.status = 'error';
+          addLog(`결과가 비어있습니다. 로그인 정보 또는 셀렉터를 확인해주세요.`, 'err');
+        }
+      } else if (statusData.status === 'error') {
+        done = true;
+        board.status = 'error';
+        addLog(`크롤링 오류 발생. Railway 로그를 확인해주세요.`, 'err');
+      }
+    }
+    if (!done) {
+      board.status = 'error';
+      addLog(`시간 초과 (5분). Railway 서버 상태를 확인해주세요.`, 'err');
+    }
+  } catch (e) {
+    board.status = 'error';
+    addLog(`네트워크 오류: ${e.message}`, 'err');
+  }
+  save(); renderCrawlList(); updateStats();
+}
+
+async function crawlAll() {
+  const allBoards = sites.flatMap(s => s.boards.map(b => ({siteId: s.id, mk: b.mk})));
+  if (!allBoards.length) { alert('등록된 게시판이 없습니다.'); return; }
+  const btn = document.getElementById('crawl-all-btn');
+  btn.disabled = true; btn.textContent = '크롤링 중...';
+  for (const {siteId, mk} of allBoards) await crawlBoard(siteId, mk);
+  btn.disabled = false; btn.textContent = '전체 크롤링';
+  addLog('모든 게시판 크롤링 완료', 'ok');
+}
+
+// ── 게시글 미리보기 ────────────────────────────────────
+function renderPostPreview() {
+  const siteId = document.getElementById('pv-site').value;
+  const mk     = document.getElementById('pv-board').value;
+  const date   = document.getElementById('pv-date').value;
+  const el     = document.getElementById('posts-container');
+  if (!siteId) { el.innerHTML = '<div class="empty">사이트를 선택해주세요.</div>'; return; }
+  const siteData = (crawledData[siteId] || {})[date] || {};
+  const entries  = mk ? [[mk, siteData[mk]]] : Object.entries(siteData);
+  const valid    = entries.filter(([, p]) => p?.length);
+  if (!valid.length) { el.innerHTML = '<div class="empty">해당 날짜에 수집된 데이터가 없습니다. 크롤링을 먼저 실행해주세요.</div>'; return; }
+  const site = sites.find(s => s.id == siteId);
+  el.innerHTML = `<div class="scroll-area">${valid.map(([bmk, posts]) => {
+    const board = site?.boards.find(b => b.mk === bmk);
+    return `<div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="mk-badge">mk=${bmk}</span>
+        <span style="font-size:14px;font-weight:500">${board?.name||'게시판'}</span>
+        <span style="font-size:11px;color:var(--muted)">${posts.length}개</span>
+      </div>
+      ${posts.map(p => `
+        <div class="post-card">
+          <div class="post-card-title">${p.title}</div>
+          <div class="post-card-body">${(p.body||'').substring(0,300)}</div>
+          <div class="post-card-meta">
+            <span style="font-size:11px;color:var(--muted)">${p.author} · 조회 ${p.views} · 좋아요 ${p.likes} · 댓글 ${p.replies?.length||0}개</span>
+            ${(p.hashtags||[]).map(h => `<span class="tag">${h}</span>`).join('')}
+          </div>
+          ${p.replies?.length ? `<div class="reply-block">
+            ${p.replies.slice(0,2).map(r => `<div><strong style="color:var(--text)">${r.author}:</strong> ${r.text} ${(r.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div>`).join('')}
+            ${p.replies.length > 2 ? `<span style="color:var(--muted)">외 ${p.replies.length-2}개 댓글</span>` : ''}
+          </div>` : ''}
+        </div>`).join('')}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ── AI 요약 생성 ───────────────────────────────────────
+async function generateSummary() {
+  const date   = document.getElementById('sm-date').value;
+  const siteId = document.getElementById('sm-site').value;
+  const mkVal  = document.getElementById('sm-board').value;
+  if (!siteId) { alert('사이트를 선택해주세요.'); return; }
+  const site     = sites.find(s => s.id == siteId);
+  const siteData = (crawledData[siteId] || {})[date] || {};
+  const entries  = mkVal === 'all' ? Object.entries(siteData) : [[mkVal, siteData[mkVal]]];
+  const valid    = entries.filter(([, p]) => p?.length);
+  if (!valid.length) {
+    document.getElementById('summaries-container').innerHTML = '<div class="empty">해당 날짜에 수집된 데이터가 없습니다.</div>';
+    return;
+  }
+  const btn = document.getElementById('gen-btn');
+  btn.disabled = true; btn.textContent = '생성 중...';
+  document.getElementById('summaries-container').innerHTML = `
+    <div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:8px">AI가 게시판 내용을 분석 중입니다...</div>
+    <div class="progress-bar"><div class="progress-fill"></div></div></div>`;
+
+  const totalPosts   = valid.reduce((a,[,p]) => a+p.length, 0);
+  const totalReplies = valid.reduce((a,[,p]) => a+p.reduce((b,x) => b+(x.replies?.length||0),0), 0);
+  const boardNames   = valid.map(([mk]) => site.boards.find(b=>b.mk===mk)?.name||'mk='+mk);
+
+  const boardTexts = valid.map(([mk, posts]) => {
+    const board = site.boards.find(b => b.mk === mk);
+    return `=== 게시판: ${board?.name||'mk='+mk} (mk=${mk}) — ${posts.length}개 게시글, ${posts.reduce((a,p)=>a+(p.replies?.length||0),0)}개 댓글 ===\n`
+      + posts.map(p => `
+게시글: ${p.title}
+작성자: ${p.author} | 조회: ${p.views} | 좋아요: ${p.likes} | 댓글: ${p.replies?.length||0}
+내용: ${(p.body||'').substring(0,400)}
+해시태그: ${(p.hashtags||[]).join(', ')||'없음'}
+댓글:
+${(p.replies||[]).slice(0,3).map(r=>`  - ${r.author}: "${r.text}"${r.tags?.length?' ['+r.tags.join(',')+']':''}`).join('\n')}${(p.replies?.length||0)>3?`\n  ...외 ${p.replies.length-3}개`:''}`).join('\n');
+  }).join('\n\n');
+
+  const prompt = `당신은 커뮤니티 인사이트 분석가입니다. 아래는 ${date}에 "${site.name}" 사이트에서 수집된 게시판별 게시글 원문입니다. 번역하지 말고 원문 그대로 분석하여 한국어로 답하세요.
+
+반드시 JSON 객체만 반환하세요. 마크다운 코드블록 없이:
+{"narrative":"전체 3~4문장 개요","boards":[{"mk":"mk값","boardName":"게시판명","narrative":"2~3문장","bullets":["인사이트1","인사이트2","인사이트3"],"topics":["주제1","주제2","주제3"],"trendingHashtags":["#태그1","#태그2","#태그3"],"sentiment":"긍정|중립|복합|부정","postCount":숫자,"replyCount":숫자,"topEngaged":"최다반응게시글제목"}],"crossBoardInsights":["발견1","발견2","발견3"],"topHashtagsOverall":["#태그1","#태그2","#태그3","#태그4","#태그5"],"overallSentiment":"긍정|중립|복합|부정","totalPosts":${totalPosts},"totalReplies":${totalReplies},"keyInsight":"핵심 발견 한 문장"}
+
+게시판 데이터:
+${boardTexts}`;
+
+  window.__pendingSummary = { date, siteName: site.name, boardNames, btn };
+  sendPrompt(prompt);
+}
+
+window.__pendingSummary = null;
+window.__activeBoardTabs = {};
+
+function tryHandleResponse(text) {
+  const p = window.__pendingSummary;
+  if (!p) return false;
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) return false;
+  try {
+    const d = JSON.parse(m[0]);
+    if (!d.narrative) return false;
+    window.__pendingSummary = null;
+    summaries.unshift({ id: Date.now(), date: p.date, siteName: p.siteName, boardNames: p.boardNames, data: d });
+    save(); renderSummaries();
+    addLog(`요약 생성 완료: ${p.siteName}`, 'ok');
+    p.btn.disabled = false; p.btn.textContent = '요약 생성 ↗';
+    return true;
+  } catch { return false; }
+}
+
+window.addEventListener('message', e => { if (e.data?.type === 'claude_response') tryHandleResponse(e.data.text); });
+
+// ── 요약 렌더링 ────────────────────────────────────────
+function renderSummaries() {
+  const el = document.getElementById('summaries-container');
+  if (!summaries.length) { el.innerHTML = '<div class="empty">생성된 요약이 없습니다.</div>'; return; }
+  const sentMap = { 긍정:{cls:'sent-pos',lbl:'긍정'}, 중립:{cls:'sent-neu',lbl:'중립'}, 복합:{cls:'sent-mix',lbl:'복합'}, 부정:{cls:'sent-neg',lbl:'부정'}, positive:{cls:'sent-pos',lbl:'긍정'}, neutral:{cls:'sent-neu',lbl:'중립'}, mixed:{cls:'sent-mix',lbl:'복합'}, negative:{cls:'sent-neg',lbl:'부정'} };
+  el.innerHTML = summaries.map((s, si) => {
+    const d = s.data;
+    const boards = d.boards || [];
+    const os = sentMap[d.overallSentiment] || sentMap['중립'];
+    const activeIdx = window.__activeBoardTabs[si] || 0;
+    const activeBoard = boards[activeIdx];
+    const bs = activeBoard ? (sentMap[activeBoard.sentiment] || sentMap['중립']) : null;
+    return `<div class="summary-card">
+      <div class="summary-header">
+        <div>
+          <div class="summary-site">${s.siteName} <span style="color:var(--muted);font-weight:300;font-size:14px">— ${s.date}</span></div>
+          <div class="summary-date">${s.boardNames.join(', ')} · ${d.totalPosts}개 게시글 · ${d.totalReplies}개 댓글</div>
+        </div>
+        <span class="sent-badge ${os.cls}">전체 감성: ${os.lbl}</span>
+      </div>
+      <div class="divider"></div>
+      <div style="margin-bottom:12px">
+        <div class="sec-label">전체 개요</div>
+        <div class="narrative">${d.narrative}</div>
+      </div>
+      ${d.keyInsight ? `<div class="insight-box"><strong>핵심 인사이트:</strong> ${d.keyInsight}</div>` : ''}
+      ${d.crossBoardInsights?.length ? `<div style="margin-bottom:12px">
+        <div class="sec-label">게시판 간 공통 발견</div>
+        <div class="bullet-list">${d.crossBoardInsights.map(b=>`<div class="bullet">${b}</div>`).join('')}</div>
+      </div>` : ''}
+      ${d.topHashtagsOverall?.length ? `<div style="margin-bottom:14px">
+        <div class="sec-label">전체 인기 해시태그</div>
+        <div class="chips">${d.topHashtagsOverall.map(t=>`<span class="chip-tag">${t}</span>`).join('')}</div>
+      </div>` : ''}
+      ${boards.length ? `<div class="divider"></div>
+      <div class="sec-label" style="margin-bottom:8px">게시판별 분석</div>
+      ${boards.length > 1 ? `<div class="board-tabs">${boards.map((b,bi)=>`<button class="board-tab${bi===activeIdx?' active':''}" onclick="setBoardTab(${si},${bi})">${b.boardName}</button>`).join('')}</div>` : ''}
+      ${activeBoard ? `<div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span class="mk-badge">mk=${activeBoard.mk}</span>
+          <span style="font-size:12px;color:var(--muted)">${activeBoard.postCount}개 · ${activeBoard.replyCount}개 댓글</span>
+          <span class="sent-badge ${bs.cls}" style="font-size:11px">감성: ${bs.lbl}</span>
+        </div>
+        <div class="narrative" style="margin-bottom:10px">${activeBoard.narrative}</div>
+        <div class="bullet-list" style="margin-bottom:12px">${(activeBoard.bullets||[]).map(b=>`<div class="bullet">${b}</div>`).join('')}</div>
+        <div class="two-col">
+          <div><div class="sec-label">주요 주제</div><div class="chips">${(activeBoard.topics||[]).map(t=>`<span class="chip-topic">${t}</span>`).join('')}</div></div>
+          <div><div class="sec-label">트렌딩 해시태그</div><div class="chips">${(activeBoard.trendingHashtags||[]).map(t=>`<span class="chip-tag">${t}</span>`).join('')}</div></div>
+        </div>
+        ${activeBoard.topEngaged ? `<div style="font-size:12px;color:var(--muted);margin-top:10px">최다 반응: <span style="color:var(--text)">${activeBoard.topEngaged}</span></div>` : ''}
+      </div>` : ''}` : ''}
+    </div>`;
+  }).join('');
+}
+
+function setBoardTab(si, bi) { window.__activeBoardTabs[si] = bi; renderSummaries(); }
+
+function renderAll() { renderSitesList(); renderCrawlList(); updateStats(); updateSelects(); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── 초기화 ─────────────────────────────────────────────
+renderAll();
+checkHealth();
+</script>
+</body>
+</html>
