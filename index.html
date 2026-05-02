@@ -377,7 +377,17 @@ function addSite() {
   const login = document.getElementById('s-login').value.trim();
   const user  = document.getElementById('s-user').value.trim();
   const pass  = document.getElementById('s-pass').value.trim();
-  if (!name || !url || !user || !pass) { alert('모든 항목을 입력해주세요.'); return; }
+  if (!name || !url) { alert('사이트 이름과 URL을 입력해주세요.'); return; }
+
+  // 같은 이름의 사이트가 있으면 아이디/비밀번호만 업데이트
+  const existing = sites.find(s => s.name === name);
+  if (existing) {
+    if (user) existing.user = user;
+    if (pass) existing.pass = pass;
+    addLog(`${name} 로그인 정보가 업데이트됐습니다.`, 'ok');
+    ['s-user','s-pass'].forEach(i => document.getElementById(i).value = '');
+    save(); renderAll(); return;
+  }
   sites.push({ id: Date.now(), name, url, login_url: login || url.replace('list.asp','').replace('board/','member/login.asp'), user, pass, boards: [] });
   ['s-name','s-url','s-login','s-user','s-pass'].forEach(i => document.getElementById(i).value = '');
   addLog(`사이트 추가: ${name}`, 'accent');
@@ -742,6 +752,32 @@ function renderAll() { renderSitesList(); renderCrawlList(); updateStats(); upda
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ── 초기화 ─────────────────────────────────────────────
+
+function loadDefaults() {
+  if (localStorage.getItem('defaults_loaded')) return;
+  document.getElementById('s-name').value  = '디스쿨';
+  document.getElementById('s-url').value   = 'https://www.dschool.co.kr/fs/board/list.asp';
+  document.getElementById('s-login').value = 'https://www.dschool.co.kr/fs/member/login.asp';
+  if (!sites.length) {
+    const id = Date.now();
+    sites.push({
+      id, name: '디스쿨',
+      url: 'https://www.dschool.co.kr/fs/board/list.asp',
+      login_url: 'https://www.dschool.co.kr/fs/member/login.asp',
+      user: '', pass: '',
+      boards: [
+        { mk: '10', name: '입시', status: 'idle', lastCrawl: null, postCount: 0, replyCount: 0 },
+        { mk: '51', name: '학원', status: 'idle', lastCrawl: null, postCount: 0, replyCount: 0 },
+        { mk: '41', name: '학교', status: 'idle', lastCrawl: null, postCount: 0, replyCount: 0 },
+      ]
+    });
+    save();
+    addLog('디스쿨 기본 사이트가 등록됐습니다. 사이트 & 게시판 탭에서 아이디/비밀번호를 입력해 주세요.', 'accent');
+    localStorage.setItem('defaults_loaded', '1');
+  }
+}
+
+loadDefaults();
 renderAll();
 checkHealth();
 </script>
