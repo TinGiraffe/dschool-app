@@ -641,15 +641,8 @@ async function generateSummary() {
 
   const boardTexts = valid.map(([mk, posts]) => {
     const board = site.boards.find(b => b.mk === mk);
-    return `=== 게시판: ${board?.name||'mk='+mk} (mk=${mk}) — ${posts.length}개 게시글, ${posts.reduce((a,p)=>a+(p.replies?.length||0),0)}개 댓글 ===\n`
-      + posts.map(p => `
-게시글: ${p.title}
-작성자: ${p.author} | 조회: ${p.views} | 좋아요: ${p.likes} | 댓글: ${p.replies?.length||0}
-내용: ${(p.body||'').substring(0,400)}
-해시태그: ${(p.hashtags||[]).join(', ')||'없음'}
-댓글:
-${(p.replies||[]).slice(0,3).map(r=>`  - ${r.author}: "${r.text}"${r.tags?.length?' ['+r.tags.join(',')+']':''}`).join('\n')}${(p.replies?.length||0)>3?`\n  ...외 ${p.replies.length-3}개`:''}`).join('\n');
-  }).join('\n\n');
+    return `=== 게시판: ${board?.name||'mk='+mk} (mk=${mk}) ===\n`
+      + posts.map(p => `[${p.title}] ${(p.body||'').substring(0,80)} 댓글${p.replies?.length||0}개 태그:${(p.hashtags||[]).slice(0,3).join(',')}`).join('\n');
 
   const prompt = `당신은 커뮤니티 인사이트 분석가입니다. 아래는 ${date}에 "${site.name}" 사이트에서 수집된 게시판별 게시글 원문입니다. 번역하지 말고 원문 그대로 분석하여 한국어로 답하세요.
 
