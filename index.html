@@ -641,8 +641,8 @@ async function generateSummary() {
 
   const boardTexts = valid.map(([mk, posts]) => {
     const board = site.boards.find(b => b.mk === mk);
-    return `=== 게시판: ${board?.name||'mk='+mk} (mk=${mk}) ===\n`
-      + posts.map(p => `[${p.title}] ${(p.body||'').substring(0,80)} 댓글${p.replies?.length||0}개 태그:${(p.hashtags||[]).slice(0,3).join(',')}`).join('\n');
+    return '=== 게시판: ' + (board?.name||'mk='+mk) + ' (mk='+mk+') ===\n'
+      + posts.map(p => '['+p.title+'] ' + (p.body||'').substring(0,80) + ' 댓글'+(p.replies?.length||0)+'개 태그:'+(p.hashtags||[]).slice(0,3).join(',')).join('\n');
 
   const prompt = `당신은 커뮤니티 인사이트 분석가입니다. 아래는 ${date}에 "${site.name}" 사이트에서 수집된 게시판별 게시글 원문입니다. 번역하지 말고 원문 그대로 분석하여 한국어로 답하세요.
 
