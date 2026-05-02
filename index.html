@@ -641,16 +641,19 @@ async function generateSummary() {
 
   const boardTexts = valid.map(([mk, posts]) => {
     const board = site.boards.find(b => b.mk === mk);
-    return '=== 게시판: ' + (board?.name||'mk='+mk) + ' (mk='+mk+') ===\n'
-      + posts.map(p => '['+p.title+'] ' + (p.body||'').substring(0,80) + ' 댓글'+(p.replies?.length||0)+'개 태그:'+(p.hashtags||[]).slice(0,3).join(',')).join('\n');
+    const boardName = board ? board.name : 'mk='+mk;
+    const lines = posts.map(p =>
+      '[' + p.title + '] ' +
+      (p.body||'').substring(0,80) +
+      ' 댓글' + (p.replies?.length||0) + '개' +
+      ' 태그:' + (p.hashtags||[]).slice(0,3).join(',')
+    ).join('\n');
+    return '=== 게시판: ' + boardName + ' (mk=' + mk + ') ===\n' + lines;
+  }).join('\n\n');
 
-  const prompt = `당신은 커뮤니티 인사이트 분석가입니다. 아래는 ${date}에 "${site.name}" 사이트에서 수집된 게시판별 게시글 원문입니다. 번역하지 말고 원문 그대로 분석하여 한국어로 답하세요.
+  const jsonSchema = '{"narrative":"전체 3~4문장 개요","boards":[{"mk":"mk값","boardName":"게시판명","narrative":"2~3문장","bullets":["인사이트1","인사이트2","인사이트3"],"topics":["주제1","주제2","주제3"],"trendingHashtags":["#태그1","#태그2","#태그3"],"sentiment":"긍정|중립|복합|부정","postCount":0,"replyCount":0,"topEngaged":"최다반응게시글제목"}],"crossBoardInsights":["발견1","발견2","발견3"],"topHashtagsOverall":["#태그1","#태그2","#태그3","#태그4","#태그5"],"overallSentiment":"긍정|중립|복합|부정","totalPosts":' + totalPosts + ',"totalReplies":' + totalReplies + ',"keyInsight":"핵심 발견 한 문장"}';
 
-반드시 JSON 객체만 반환하세요. 마크다운 코드블록 없이:
-{"narrative":"전체 3~4문장 개요","boards":[{"mk":"mk값","boardName":"게시판명","narrative":"2~3문장","bullets":["인사이트1","인사이트2","인사이트3"],"topics":["주제1","주제2","주제3"],"trendingHashtags":["#태그1","#태그2","#태그3"],"sentiment":"긍정|중립|복합|부정","postCount":숫자,"replyCount":숫자,"topEngaged":"최다반응게시글제목"}],"crossBoardInsights":["발견1","발견2","발견3"],"topHashtagsOverall":["#태그1","#태그2","#태그3","#태그4","#태그5"],"overallSentiment":"긍정|중립|복합|부정","totalPosts":${totalPosts},"totalReplies":${totalReplies},"keyInsight":"핵심 발견 한 문장"}
-
-게시판 데이터:
-${boardTexts}`;
+  const prompt = '커뮤니티 인사이트 분석가로서 ' + date + ' "' + site.name + '" 게시판 데이터를 한국어로 분석하세요.\n\n반드시 JSON 객체만 반환하세요. 마크다운 코드블록 없이:\n' + jsonSchema + '\n\n게시판 데이터:\n' + boardTexts;
 
   window.__pendingSummary = { date, siteName: site.name, boardNames, btn };
   sendPrompt(prompt);
