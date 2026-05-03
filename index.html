@@ -431,7 +431,8 @@ let addBoardTarget = null;
 let scheduleTimer = null;
 
 const TODAY = new Date().toISOString().split('T')[0];
-document.getElementById('pv-date').value = TODAY;
+const YESTERDAY = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+document.getElementById('pv-date').value = YESTERDAY;
 document.getElementById('trend-date').value = TODAY;
 document.getElementById('cfg-server').value = SERVER;
 document.getElementById('cfg-email-from').value = localStorage.getItem('email-from') || '';
