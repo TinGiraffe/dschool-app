@@ -792,6 +792,7 @@ async function crawlBoard(siteId, mk) {
           board.status='done';
           addLog('완료: '+posts.length+'개 게시글', 'ok');
           checkKeywordMatches(posts);
+          localStorage.setItem('pending-summary-site', siteId);
         } else { board.status='error'; addLog('결과 없음. 로그인 정보 확인', 'err'); }
       } else if (s==='error') { done=true; board.status='error'; addLog('크롤링 오류', 'err'); }
     }
@@ -810,6 +811,19 @@ async function crawlAll() {
   for (const {siteId,mk} of all) await crawlBoard(siteId,mk);
   btn.disabled=false; btn.textContent='🔄 전체 크롤링';
   addLog('모든 게시판 크롤링 완료', 'ok');
+  // 크롤링 완료 후 자동 AI 요약
+  const pendingSite = localStorage.getItem('pending-summary-site');
+  if (pendingSite && scheduleSettings.autoSummary) {
+    addLog('크롤링 완료 → AI 요약 자동 생성 시작...', 'accent');
+    document.getElementById('sm-site').value = pendingSite;
+    onSmSiteChange();
+    setPeriod('daily');
+    updatePeriodDateFields();
+    goPage('summaries');
+    await sleep(1000);
+    await generateSummary();
+    localStorage.removeItem('pending-summary-site');
+  }
   localStorage.setItem('last-crawl', new Date().toISOString());
 }
 
@@ -817,6 +831,10 @@ async function crawlAll() {
 async function loadFromServer(siteId, date) {
   const site = sites.find(s=>s.id==siteId);
   if (!site) return;
+  const smSite = document.getElementById('sm-site');
+  const pvSite = document.getElementById('pv-site');
+  const savedSmSite = smSite?.value;
+  const savedPvSite = pvSite?.value;
   addLog(date+' 서버 결과 불러오는 중...', 'info');
   for (const board of site.boards) {
     try {
@@ -832,6 +850,8 @@ async function loadFromServer(siteId, date) {
     } catch(e) { addLog('불러오기 오류: '+e.message, 'err'); }
   }
   save(); renderAll(); updateStats();
+  if (smSite && savedSmSite) smSite.value = savedSmSite;
+  if (pvSite && savedPvSite) pvSite.value = savedPvSite;
 }
 
 async function loadFromServerUI() {
