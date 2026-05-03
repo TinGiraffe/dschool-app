@@ -857,8 +857,18 @@ async function loadFromServer(siteId, date) {
 async function loadFromServerUI() {
   const siteId = document.getElementById('sm-site')?.value || document.getElementById('pv-site')?.value;
   if (!siteId) { alert('사이트를 선택해주세요.'); return; }
-  const [start, end] = getPeriodDateRange();
-  const dates = getDatesInRange(start, end);
+
+  // 게시글 미리보기 탭에서는 선택된 날짜 하루만
+  const pvDate = document.getElementById('pv-date')?.value;
+  const isPostsPage = document.getElementById('page-posts').classList.contains('active');
+
+  let dates;
+  if (isPostsPage && pvDate) {
+    dates = [pvDate];
+  } else {
+    const [start, end] = getPeriodDateRange();
+    dates = getDatesInRange(start, end);
+  }
   addLog(dates.length+'일치 데이터 불러오는 중...', 'info');
   for (const date of dates) await loadFromServer(siteId, date);
   renderPostPreview(); renderTrends(); addLog('불러오기 완료', 'ok');
